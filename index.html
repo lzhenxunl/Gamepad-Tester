@@ -1,0 +1,1229 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>手柄检测器 · Gamepad Tester</title>
+<script>
+  /* 尽早应用主题，避免闪白 */
+  try{
+    var _t = JSON.parse(localStorage.getItem('gamepad-tester-theme-v1') || 'null');
+    if (_t && _t.mode) document.documentElement.dataset.theme = _t.mode;
+  }catch(e){}
+</script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+
+  /* ================= 主题变量 =================
+     暗色方案 = 第一版原始配色（绿/青）
+     亮色方案 = 主色 #ffb8f1 / 强调 #0ab6ff / 背景 #c7d9ff
+  ================================================ */
+  :root{
+    --bg:#0a0d13;
+    --bg-glow:#16233a;
+    --panel:#121722;
+    --panel-2:#182030;
+    --line:#243044;
+    --line-strong:#2c3a52;
+    --text:#e8eef9;
+    --muted:#7c8aa0;
+    --accent:#3ddc84;
+    --accent-2:#38bdf8;
+    --accent-rgb:61,220,132;
+    --accent2-rgb:56,189,248;
+    --warn:#fbbf24;
+    --danger:#f87171;
+    --track:#0b101a;
+    --stick-1:#0e1521;
+    --stick-2:#080b12;
+    --dot-a:#8cf5bd;
+    --dot-b:#1d9a5c;
+    --shadow:rgba(0,0,0,.45);
+    --radius:14px;
+    --ease:cubic-bezier(.4,0,.2,1);
+    --spring:cubic-bezier(.2,.9,.3,1.3);
+    color-scheme:dark;
+  }
+
+  [data-theme="light"]{
+    --bg:#c7d9ff;
+    --bg-glow:#b3ccff;
+    --panel:#ffffff;
+    --panel-2:#eef4ff;
+    --line:#b9cdf2;
+    --line-strong:#9db8e8;
+    --text:#131c2c;
+    --muted:#5b6b88;
+    --accent:#ffb8f1;
+    --accent-2:#0ab6ff;
+    --accent-rgb:255,184,241;
+    --accent2-rgb:10,182,255;
+    --track:#e2ecff;
+    --stick-1:#f4f9ff;
+    --stick-2:#dce8fb;
+    --dot-a:#ffd6f8;
+    --dot-b:#ffb8f1;
+    --shadow:rgba(23,40,70,.13);
+    color-scheme:light;
+  }
+
+  /* ================= 基础 ================= */
+  html{scroll-behavior:smooth}
+  body{
+    font-family:system-ui,-apple-system,"Segoe UI","Noto Sans SC","PingFang SC",sans-serif;
+    background-color:var(--bg);
+    background-image:radial-gradient(1200px 640px at 50% -12%, var(--bg-glow) 0%, transparent 62%);
+    background-attachment:fixed;
+    color:var(--text);
+    min-height:100vh;
+    padding:22px;
+    -webkit-font-smoothing:antialiased;
+    transition:background-color .45s var(--ease), color .45s var(--ease);
+  }
+
+  .wrap{max-width:1180px;margin:0 auto}
+
+  /* ================= 启动动画 ================= */
+  #boot{
+    position:fixed;inset:0;z-index:300;
+    display:grid;place-items:center;
+    background:var(--bg);
+    transition:opacity .55s var(--ease), visibility .55s var(--ease);
+    animation:bootFallback .6s ease 3.4s forwards;
+    cursor:pointer;
+  }
+  #boot.skip{animation:none;opacity:0;visibility:hidden;pointer-events:none}
+  @keyframes bootFallback{to{opacity:0;visibility:hidden;pointer-events:none}}
+
+  .boot-inner{display:flex;flex-direction:column;align-items:center;text-align:center}
+
+  .boot-logo{
+    position:relative;width:96px;height:96px;display:grid;place-items:center;
+    font-size:44px;line-height:1;
+    animation:logoIn .9s cubic-bezier(.2,.9,.3,1.4) both;
+    filter:drop-shadow(0 0 26px rgba(var(--accent-rgb),.45));
+  }
+  .boot-logo .gp{display:block;animation:floaty 3s ease-in-out 1s infinite}
+  @keyframes floaty{50%{transform:translateY(-5px)}}
+  @keyframes logoIn{
+    0%{opacity:0;transform:scale(.35) rotate(-14deg)}
+    100%{opacity:1;transform:scale(1) rotate(0)}
+  }
+  .boot-logo .ring{
+    position:absolute;inset:0;border-radius:50%;
+    border:1.5px solid rgba(var(--accent-rgb),.5);
+    animation:ringPulse 1.9s ease-out infinite;
+  }
+  .boot-logo .ring.r2{animation-delay:.95s}
+  @keyframes ringPulse{
+    0%{transform:scale(.6);opacity:.85}
+    100%{transform:scale(1.55);opacity:0}
+  }
+  .boot-title{
+    font-size:19px;font-weight:700;letter-spacing:2px;margin-top:20px;
+    animation:upIn .7s .2s var(--ease) both;
+  }
+  .boot-sub{
+    font-size:10.5px;letter-spacing:4.5px;color:var(--muted);margin-top:8px;
+    animation:upIn .7s .3s var(--ease) both;
+  }
+  .boot-bar{
+    width:190px;height:3px;border-radius:3px;overflow:hidden;
+    background:var(--track);margin-top:28px;
+    animation:upIn .7s .38s var(--ease) both;
+  }
+  .boot-bar i{
+    display:block;height:100%;width:0;border-radius:3px;
+    background:linear-gradient(90deg,var(--accent-2),var(--accent));
+    animation:barFill 1.3s .5s var(--ease) forwards;
+  }
+  @keyframes barFill{to{width:100%}}
+  .boot-hint{
+    font-size:11.5px;color:var(--muted);margin-top:16px;
+    animation:upIn .7s .48s var(--ease) both;
+  }
+  @keyframes upIn{
+    0%{opacity:0;transform:translateY(10px)}
+    100%{opacity:1;transform:translateY(0)}
+  }
+
+  /* ================= 入场动画 ================= */
+  @keyframes enterUp{
+    0%{opacity:0;transform:translateY(18px) scale(.986)}
+    100%{opacity:1;transform:none}
+  }
+  header{animation:enterUp .6s var(--ease) both;animation-delay:1.72s}
+  .card{animation:enterUp .62s var(--ease) both}
+
+  /* ================= 顶栏 ================= */
+  header{
+    display:flex;align-items:center;justify-content:space-between;
+    gap:16px;flex-wrap:wrap;margin-bottom:22px;
+    position:relative;z-index:500;           /* 修复主题面板被遮挡 */
+  }
+  h1{font-size:20px;font-weight:650;letter-spacing:.4px;display:flex;align-items:center;gap:10px}
+  h1 em{font-style:normal;color:var(--accent);transition:color .4s var(--ease)}
+
+  .header-right{display:flex;align-items:center;gap:10px}
+
+  .status{
+    display:flex;align-items:center;gap:9px;font-size:13px;color:var(--muted);
+    background:var(--panel);border:1px solid var(--line);
+    padding:9px 15px;border-radius:999px;
+    transition:color .3s var(--ease), border-color .3s var(--ease), background-color .4s var(--ease);
+  }
+  .status::before{
+    content:'';width:8px;height:8px;border-radius:50%;background:#4b5563;
+    transition:background .3s var(--ease), box-shadow .3s var(--ease);
+  }
+  .status.on{color:var(--accent);border-color:rgba(var(--accent-rgb),.35)}
+  .status.on::before{background:var(--accent);box-shadow:0 0 10px var(--accent);animation:pulse 2s infinite}
+  @keyframes pulse{50%{opacity:.35}}
+
+  .icon-btn{
+    width:38px;height:38px;border-radius:11px;
+    background:var(--panel);border:1px solid var(--line);color:var(--text);
+    font-size:16px;cursor:pointer;display:grid;place-items:center;
+    transition:all .22s var(--ease);
+  }
+  .icon-btn:hover{border-color:var(--accent);color:var(--accent);transform:translateY(-1px)}
+  .icon-btn:active{transform:scale(.94)}
+
+  /* ================= 主题面板 ================= */
+  .theme-wrap{position:relative}
+  .theme-panel{
+    position:absolute;right:0;top:calc(100% + 10px);
+    width:262px;padding:14px;border-radius:15px;
+    background:var(--panel);border:1px solid var(--line);
+    box-shadow:0 24px 54px var(--shadow);
+    z-index:600;                            /* 高于卡片 */
+    opacity:0;visibility:hidden;
+    transform:translateY(-8px) scale(.96);
+    transform-origin:top right;
+    transition:opacity .24s var(--ease), transform .24s var(--ease), visibility .24s;
+  }
+  .theme-panel.open{opacity:1;visibility:visible;transform:none}
+
+  .tp-label{
+    font-size:10.5px;font-weight:700;letter-spacing:1.3px;
+    text-transform:uppercase;color:var(--muted);margin-bottom:9px;
+  }
+
+  .mode-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+  .mode-btn{
+    display:flex;flex-direction:column;align-items:center;gap:6px;
+    padding:9px 3px;border-radius:10px;cursor:pointer;font:inherit;
+    font-size:11.5px;color:var(--muted);
+    background:var(--panel-2);border:1px solid var(--line);
+    transition:all .2s var(--ease);
+  }
+  .mode-btn:hover{border-color:var(--line-strong);color:var(--text);transform:translateY(-1px)}
+  .mode-btn.active{
+    border-color:var(--accent);color:var(--accent);
+    background:rgba(var(--accent-rgb),.1);
+    box-shadow:0 0 0 1px rgba(var(--accent-rgb),.2) inset;
+  }
+  .sw{width:22px;height:22px;border-radius:7px;border:1px solid var(--line-strong)}
+  .sw-dark{background:linear-gradient(135deg,#1b2434,#0a0d13)}
+  .sw-light{background:linear-gradient(135deg,#ffffff,#c7d9ff)}
+  .sw-custom{background:linear-gradient(135deg,var(--accent),var(--accent-2))}
+
+  .custom-box{
+    display:none;flex-direction:column;gap:10px;
+    margin-top:12px;padding-top:12px;border-top:1px dashed var(--line);
+  }
+  .custom-box.show{display:flex;animation:upIn .3s var(--ease)}
+  .color-row{
+    display:flex;align-items:center;justify-content:space-between;
+    font-size:12px;color:var(--muted);
+  }
+  .color-row input[type=color]{
+    width:54px;height:28px;padding:0;border:1px solid var(--line);
+    border-radius:8px;background:transparent;cursor:pointer;
+    transition:border-color .2s var(--ease);
+  }
+  .color-row input[type=color]:hover{border-color:var(--accent)}
+  input[type=color]::-webkit-color-swatch-wrapper{padding:2px}
+  input[type=color]::-webkit-color-swatch{border:none;border-radius:6px}
+
+  /* ================= 布局 ================= */
+  .layout{display:grid;grid-template-columns:290px 1fr;gap:16px;align-items:start}
+  @media(max-width:880px){.layout{grid-template-columns:1fr}}
+
+  /* ================= 卡片 & 折叠 ================= */
+  .card{
+    background-color:var(--panel);
+    background-image:linear-gradient(180deg, rgba(255,255,255,.025), rgba(0,0,0,.03));
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    margin-bottom:16px;
+    overflow:hidden;
+    transition:background-color .4s var(--ease), border-color .4s var(--ease),
+               box-shadow .28s var(--ease), transform .28s var(--ease);
+  }
+  [data-theme="light"] .card{
+    background-image:linear-gradient(180deg, rgba(255,255,255,.55), rgba(255,255,255,0));
+  }
+  .card:hover{border-color:var(--line-strong);box-shadow:0 12px 30px -14px var(--shadow)}
+
+  .card-head{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:14px 16px;cursor:pointer;user-select:none;
+    transition:background-color .22s var(--ease);
+  }
+  .card-head:hover{background:rgba(var(--accent-rgb),.055)}
+  .card-head:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+
+  .card-head-left{display:flex;flex-direction:column;gap:3px;min-width:0}
+  .card-title{
+    font-size:11px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:1.4px;
+    transition:color .22s var(--ease);
+  }
+  .card-head:hover .card-title{color:var(--text)}
+  .card-desc{
+    font-size:10.5px;font-weight:400;color:var(--muted);
+    letter-spacing:.2px;text-transform:none;line-height:1.4;
+  }
+
+  .chev{
+    width:15px;height:15px;flex:none;
+    fill:none;stroke:var(--muted);stroke-width:2.4;
+    stroke-linecap:round;stroke-linejoin:round;
+    transition:transform .42s var(--ease), stroke .22s var(--ease);
+  }
+  .card-head:hover .chev{stroke:var(--text)}
+  .card.collapsed .chev{transform:rotate(-90deg)}
+
+  .card-body{
+    display:grid;grid-template-rows:1fr;
+    transition:grid-template-rows .42s var(--ease);
+  }
+  .card.collapsed .card-body{grid-template-rows:0fr}
+  .card-clip{overflow:hidden;min-height:0}
+  .card-content{padding:0 16px 16px;transition:opacity .3s var(--ease)}
+  .card.collapsed .card-content{opacity:0}
+
+  /* ================= 手柄列表 ================= */
+  .pad-list{display:flex;flex-direction:column;gap:8px}
+  .pad-item{
+    display:flex;align-items:center;gap:11px;width:100%;text-align:left;
+    background:var(--panel-2);border:1px solid var(--line);color:var(--text);
+    padding:10px 12px;border-radius:11px;cursor:pointer;font:inherit;
+    transition:all .2s var(--ease);
+  }
+  .pad-item:hover{border-color:var(--line-strong);transform:translateY(-1px)}
+  .pad-item.active{
+    border-color:var(--accent);
+    background:rgba(var(--accent-rgb),.09);
+    box-shadow:0 0 0 1px rgba(var(--accent-rgb),.25) inset;
+  }
+  .pad-icon{font-size:18px;line-height:1}
+  .pad-meta{display:flex;flex-direction:column;gap:2px;min-width:0}
+  .pad-meta b{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pad-meta small{font-size:11px;color:var(--muted)}
+
+  .empty{color:var(--muted);font-size:13px;line-height:1.8;text-align:center;padding:8px 0}
+  .empty span{font-size:12px;opacity:.75}
+
+  /* ================= 信息 ================= */
+  .info-row{
+    display:flex;justify-content:space-between;gap:12px;font-size:12.5px;
+    padding:7px 0;border-bottom:1px dashed rgba(255,255,255,.055);
+  }
+  [data-theme="light"] .info-row{border-bottom-color:rgba(0,0,0,.06)}
+  .info-row:last-child{border-bottom:0;padding-bottom:0}
+  .info-row dt{color:var(--muted);flex:none}
+  .info-row dd{
+    text-align:right;word-break:break-all;
+    font-variant-numeric:tabular-nums;font-size:12px;color:var(--text);
+  }
+
+  /* ================= 按钮 ================= */
+  .btn-row{display:flex;gap:8px;flex-wrap:wrap}
+  .action{
+    flex:1;min-width:96px;font:inherit;font-size:12.5px;font-weight:600;
+    padding:9px 12px;border-radius:9px;cursor:pointer;
+    background:var(--panel-2);border:1px solid var(--line);color:var(--text);
+    transition:all .2s var(--ease);
+  }
+  .action:hover{border-color:var(--accent-2);color:var(--accent-2);transform:translateY(-1px)}
+  .action:active{transform:scale(.96)}
+
+  /* ================= 摇杆（现代平面风格） ================= */
+  .sticks{display:flex;gap:34px;flex-wrap:wrap;justify-content:center;padding:8px 0 4px}
+  .stick-wrap{display:flex;flex-direction:column;align-items:center;gap:11px}
+  .stick{
+    position:relative;width:164px;height:164px;border-radius:18px;
+    background:var(--stick-1);
+    background-image:
+      linear-gradient(var(--line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size:20px 20px;
+    background-position:center center;
+    border:1px solid var(--line);
+    box-shadow:inset 0 0 24px rgba(0,0,0,.25);
+    overflow:hidden;
+    transition:background .4s var(--ease), border-color .4s var(--ease);
+  }
+  [data-theme="light"] .stick{box-shadow:inset 0 0 24px rgba(70,100,160,.10)}
+  .stick-dot{
+    position:absolute;left:50%;top:50%;width:26px;height:26px;
+    margin:-13px 0 0 -13px;border-radius:50%;
+    background:radial-gradient(circle at 34% 30%, var(--dot-a), var(--dot-b) 70%);
+    box-shadow:0 0 18px rgba(var(--accent-rgb),.55), 0 2px 6px rgba(0,0,0,.45);
+    will-change:transform;
+    transition:transform .08s linear;
+  }
+  .stick-name{font-size:12px;color:var(--muted);display:flex;gap:8px;align-items:center}
+  .stick-name b{color:var(--text);font-weight:600}
+  .stick-name code{
+    font-variant-numeric:tabular-nums;color:var(--accent-2);font-size:11.5px;
+    font-family:ui-monospace,Menlo,Consolas,monospace;
+  }
+
+  /* ================= 按键 ================= */
+  .buttons{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px}
+  .btn{
+    background:var(--panel-2);border:1px solid var(--line);
+    border-radius:10px;padding:8px 10px 9px;cursor:help;
+    transition:background-color .12s linear, border-color .12s linear, box-shadow .12s linear;
+  }
+  .btn.pressed{
+    border-color:var(--accent);
+    background:rgba(var(--accent-rgb),.16);
+    box-shadow:0 0 14px rgba(var(--accent-rgb),.28);
+  }
+  .btn-top{display:flex;justify-content:space-between;align-items:baseline;gap:6px;margin-bottom:7px}
+  .btn-name{font-size:12px;font-weight:650;letter-spacing:.3px}
+  .btn-val{
+    font-size:10.5px;color:var(--muted);font-variant-numeric:tabular-nums;
+    font-family:ui-monospace,Menlo,Consolas,monospace;
+  }
+  .btn.pressed .btn-val{color:var(--accent)}
+  .btn-meter{height:4px;background:var(--track);border-radius:2px;overflow:hidden}
+  .btn-meter i{display:block;height:100%;width:0;background:var(--accent-2);border-radius:2px}
+  .btn.pressed .btn-meter i{background:var(--accent)}
+
+  /* ================= 轴 ================= */
+  .axes{display:flex;flex-direction:column;gap:11px}
+  .axis-row{display:grid;grid-template-columns:46px 1fr 62px;align-items:center;gap:12px}
+  .axis-name{font-size:11.5px;color:var(--muted);font-weight:600;letter-spacing:.4px}
+  .axis-track{position:relative;height:8px;background:var(--track);border-radius:5px;overflow:hidden}
+  .axis-track::before{
+    content:'';position:absolute;left:50%;top:0;bottom:0;width:1px;
+    background:var(--line-strong);z-index:2;
+  }
+  .axis-fill{
+    position:absolute;top:0;bottom:0;left:50%;width:0;
+    background:var(--accent-2);border-radius:3px;
+  }
+  .axis-fill.neg{background:var(--warn)}
+  .axis-value{
+    font-size:11.5px;text-align:right;color:var(--muted);
+    font-variant-numeric:tabular-nums;
+    font-family:ui-monospace,Menlo,Consolas,monospace;
+  }
+
+  /* ================= 提示 ================= */
+  .hint{
+    font-size:12px;color:var(--muted);line-height:1.75;
+    border-left:2px solid var(--line);padding-left:11px;margin-top:14px;
+  }
+  .hint code{
+    background:var(--track);padding:1px 5px;border-radius:4px;
+    font-size:11px;color:var(--accent-2);
+  }
+
+  /* ================= Toast ================= */
+  #toast{
+    position:fixed;left:50%;bottom:26px;
+    transform:translate(-50%,16px);
+    background:var(--panel-2);border:1px solid var(--line);color:var(--text);
+    padding:11px 20px;border-radius:10px;font-size:13px;
+    opacity:0;pointer-events:none;z-index:999;
+    box-shadow:0 14px 36px var(--shadow);
+    transition:opacity .26s var(--ease), transform .26s var(--ease);
+  }
+  #toast.show{opacity:1;transform:translate(-50%,0)}
+
+  /* ================= 无障碍 ================= */
+  @media (prefers-reduced-motion: reduce){
+    *,*::before,*::after{
+      animation-duration:.001ms !important;
+      animation-delay:0s !important;
+      transition-duration:.001ms !important;
+    }
+  }
+</style>
+</head>
+<body>
+
+<!-- ================= 启动动画 ================= -->
+<div id="boot">
+  <div class="boot-inner">
+    <div class="boot-logo">
+      <span class="ring"></span>
+      <span class="ring r2"></span>
+      <span class="gp">🎮</span>
+    </div>
+    <div class="boot-title">手柄检测器</div>
+    <div class="boot-sub">GAMEPAD TESTER</div>
+    <div class="boot-bar"><i></i></div>
+    <div class="boot-hint">连接手柄后按任意键开始</div>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <header>
+    <h1>🎮 手柄检测器 <em>Gamepad Tester</em></h1>
+    <div class="header-right">
+      <div class="status" id="status">等待连接…</div>
+      <div class="theme-wrap">
+        <button class="icon-btn" id="themeBtn" title="外观主题" aria-label="切换主题">🎨</button>
+        <div class="theme-panel" id="themePanel" role="dialog" aria-label="主题设置">
+          <p class="tp-label">外观模式</p>
+          <div class="mode-grid">
+            <button class="mode-btn" data-mode="dark"><span class="sw sw-dark"></span>暗色</button>
+            <button class="mode-btn" data-mode="light"><span class="sw sw-light"></span>亮色</button>
+            <button class="mode-btn" data-mode="custom"><span class="sw sw-custom"></span>自定义</button>
+          </div>
+          <div class="custom-box" id="customBox">
+            <div class="color-row"><span>主色</span><input type="color" id="cAccent" value="#3ddc84"></div>
+            <div class="color-row"><span>强调色</span><input type="color" id="cAccent2" value="#38bdf8"></div>
+            <div class="color-row"><span>背景色</span><input type="color" id="cBg" value="#0a0d13"></div>
+            <button class="action" id="resetTheme" style="margin-top:2px">恢复默认</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="layout">
+
+    <!-- ============ 左侧 ============ -->
+    <aside>
+
+      <section class="card" data-card="pads">
+        <div class="card-head" role="button" tabindex="0" aria-expanded="true">
+          <div class="card-head-left">
+            <span class="card-title">已连接手柄</span>
+            <span class="card-desc">检测到的游戏手柄列表，点击切换</span>
+          </div>
+          <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+        </div>
+        <div class="card-body">
+          <div class="card-clip">
+            <div class="card-content">
+              <div class="pad-list" id="padList">
+                <p class="empty">暂无手柄<br><span>请连接手柄后按任意按键</span></p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" data-card="info">
+        <div class="card-head" role="button" tabindex="0" aria-expanded="true">
+          <div class="card-head-left">
+            <span class="card-title">设备信息</span>
+            <span class="card-desc">当前手柄的详细参数与能力</span>
+          </div>
+          <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+        </div>
+        <div class="card-body">
+          <div class="card-clip">
+            <div class="card-content">
+              <dl id="info"><p class="empty">—</p></dl>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" data-card="rumble">
+        <div class="card-head" role="button" tabindex="0" aria-expanded="true">
+          <div class="card-head-left">
+            <span class="card-title">震动测试</span>
+            <span class="card-desc">向支持的手柄发送震动反馈</span>
+          </div>
+          <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+        </div>
+        <div class="card-body">
+          <div class="card-clip">
+            <div class="card-content">
+              <div class="btn-row">
+                <button class="action" id="rumbleWeak">轻震</button>
+                <button class="action" id="rumbleStrong">强震</button>
+              </div>
+              <p class="hint">仅部分浏览器 / 手柄支持震动反馈（Chrome 对 Xbox 手柄支持较好）。</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </aside>
+
+    <!-- ============ 右侧 ============ -->
+    <main>
+
+      <section class="card" data-card="sticks">
+        <div class="card-head" role="button" tabindex="0" aria-expanded="true">
+          <div class="card-head-left">
+            <span class="card-title">摇杆</span>
+            <span class="card-desc">左右摇杆的实时二维位置</span>
+          </div>
+          <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+        </div>
+        <div class="card-body">
+          <div class="card-clip">
+            <div class="card-content">
+              <div class="sticks">
+                <div class="stick-wrap">
+                  <div class="stick" id="stickL">
+                    <div class="stick-dot"></div>
+                  </div>
+                  <div class="stick-name"><b>左摇杆</b><code id="stickLVal">0.00, 0.00</code></div>
+                </div>
+                <div class="stick-wrap">
+                  <div class="stick" id="stickR">
+                    <div class="stick-dot"></div>
+                  </div>
+                  <div class="stick-name"><b>右摇杆</b><code id="stickRVal">0.00, 0.00</code></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" data-card="buttons">
+        <div class="card-head" role="button" tabindex="0" aria-expanded="true">
+          <div class="card-head-left">
+            <span class="card-title">按键 / 扳机</span>
+            <span class="card-desc">各按键与扳机的实时状态（悬停查看位置）</span>
+          </div>
+          <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+        </div>
+        <div class="card-body">
+          <div class="card-clip">
+            <div class="card-content">
+              <div class="buttons" id="buttons">
+                <p class="empty">连接手柄后显示</p>
+              </div>
+              <p class="hint">
+                按下手柄任意按键唤醒，浏览器才会开始上报数据。若信息为空，请拔插手柄后再次按键。
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" data-card="axes">
+        <div class="card-head" role="button" tabindex="0" aria-expanded="true">
+          <div class="card-head-left">
+            <span class="card-title">轴数据（Axes）</span>
+            <span class="card-desc">各轴原始数值与方向</span>
+          </div>
+          <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+        </div>
+        <div class="card-body">
+          <div class="card-clip">
+            <div class="card-content">
+              <div class="axes" id="axes">
+                <p class="empty">连接手柄后显示</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+(() => {
+  'use strict';
+
+  /* ============================================================
+     0. 通用工具
+  ============================================================ */
+  const $ = s => document.querySelector(s);
+  const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+
+  const hexToRgb = (hex) => {
+    let h = String(hex).replace('#', '').trim();
+    if (h.length === 3) h = h.split('').map(c => c + c).join('');
+    const n = parseInt(h, 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  };
+  const rgbToHex = ([r, g, b]) =>
+    '#' + [r, g, b].map(v => Math.round(clamp(v, 0, 255)).toString(16).padStart(2, '0')).join('');
+  const mix = (a, b, t) => {
+    const A = hexToRgb(a), B = hexToRgb(b);
+    return rgbToHex(A.map((v, i) => v + (B[i] - v) * t));
+  };
+  const luminance = (hex) => {
+    const [r, g, b] = hexToRgb(hex).map(v => {
+      v /= 255;
+      return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const escapeHtml = (s) => String(s).replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  /* ============================================================
+     1. Toast
+  ============================================================ */
+  const toastEl = $('#toast');
+  let toastTimer;
+  function toast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2200);
+  }
+
+  /* ============================================================
+     2. 主题系统
+        · 默认暗色 = 第一版原始配色（#3ddc84 / #38bdf8 / #0a0d13）
+        · 亮色由 CSS [data-theme="light"] 定义（#ffb8f1 / #0ab6ff / #c7d9ff）
+        · 自定义基于用户取色推导
+  ============================================================ */
+  const THEME_KEY = 'gamepad-tester-theme-v1';
+  const DEFAULT_THEME = { mode: 'dark', accent: '#3ddc84', accent2: '#38bdf8', bg: '#0a0d13' };
+
+  let theme = { ...DEFAULT_THEME };
+  try {
+    const saved = JSON.parse(localStorage.getItem(THEME_KEY) || 'null');
+    if (saved) theme = { ...theme, ...saved };
+  } catch (e) { /* ignore */ }
+
+  const root = document.documentElement;
+  const CUSTOM_VARS = [
+    '--bg', '--bg-glow', '--panel', '--panel-2', '--line', '--line-strong',
+    '--text', '--muted', '--accent', '--accent-2', '--accent-rgb', '--accent2-rgb',
+    '--track', '--stick-1', '--stick-2', '--dot-a', '--dot-b', '--shadow'
+  ];
+
+  /* 根据自定义颜色推导一整套协调的派生变量 */
+  function buildCustomVars(t) {
+    const bg = t.bg;
+    const accent = t.accent;
+    const accent2 = t.accent2;
+    const light = luminance(bg) > 0.5;
+
+    let panel, panel2, line, lineStrong, text, muted, track, stick1, stick2, glow, dotA, shadow;
+
+    if (light) {
+      panel      = mix(bg, '#000000', 0.05);
+      panel2     = mix(bg, '#000000', 0.022);
+      line       = mix(bg, '#000000', 0.14);
+      lineStrong = mix(bg, '#000000', 0.24);
+      text       = '#101a2b';
+      muted      = mix(text, bg, 0.45);
+      track      = mix(bg, '#000000', 0.07);
+      stick1     = mix(bg, '#ffffff', 0.55);
+      stick2     = mix(bg, '#000000', 0.05);
+      glow       = mix(bg, accent, 0.14);
+      dotA       = mix(accent, '#ffffff', 0.35);
+      shadow     = 'rgba(23,40,70,.13)';
+    } else {
+      panel      = mix(bg, '#000000', 0.14);
+      panel2     = mix(bg, '#000000', 0.07);
+      line       = mix(bg, '#ffffff', 0.14);
+      lineStrong = mix(bg, '#ffffff', 0.24);
+      text       = '#f0f4fd';
+      muted      = mix(text, bg, 0.42);
+      track      = mix(bg, '#000000', 0.35);
+      stick1     = mix(bg, '#000000', 0.08);
+      stick2     = mix(bg, '#000000', 0.22);
+      glow       = mix(bg, accent, 0.12);
+      dotA       = mix(accent, '#ffffff', 0.30);
+      shadow     = 'rgba(0,0,0,.45)';
+    }
+
+    return {
+      '--bg': bg,
+      '--bg-glow': glow,
+      '--panel': panel,
+      '--panel-2': panel2,
+      '--line': line,
+      '--line-strong': lineStrong,
+      '--text': text,
+      '--muted': muted,
+      '--accent': accent,
+      '--accent-2': accent2,
+      '--accent-rgb': hexToRgb(accent).join(','),
+      '--accent2-rgb': hexToRgb(accent2).join(','),
+      '--track': track,
+      '--stick-1': stick1,
+      '--stick-2': stick2,
+      '--dot-a': dotA,
+      '--dot-b': accent,
+      '--shadow': shadow
+    };
+  }
+
+  function applyTheme() {
+    root.dataset.theme = theme.mode;
+    CUSTOM_VARS.forEach(v => root.style.removeProperty(v));
+
+    if (theme.mode === 'custom') {
+      const vars = buildCustomVars(theme);
+      Object.keys(vars).forEach(k => root.style.setProperty(k, vars[k]));
+      root.style.colorScheme = luminance(theme.bg) > 0.5 ? 'light' : 'dark';
+    } else {
+      root.style.removeProperty('color-scheme');
+    }
+
+    document.querySelectorAll('.mode-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.mode === theme.mode));
+    $('#customBox').classList.toggle('show', theme.mode === 'custom');
+    $('#cAccent').value  = theme.accent;
+    $('#cAccent2').value = theme.accent2;
+    $('#cBg').value      = theme.bg;
+
+    try { localStorage.setItem(THEME_KEY, JSON.stringify(theme)); } catch (e) {}
+  }
+
+  function setMode(mode) {
+    theme.mode = mode;
+    applyTheme();
+  }
+
+  applyTheme();
+
+  /* ---- 主题面板交互 ---- */
+  const themeBtn   = $('#themeBtn');
+  const themePanel = $('#themePanel');
+  const closePanel = () => themePanel.classList.remove('open');
+
+  themeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    themePanel.classList.toggle('open');
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!themePanel.contains(e.target) && !themeBtn.contains(e.target)) closePanel();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closePanel();
+  });
+
+  document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => setMode(btn.dataset.mode));
+  });
+
+  $('#cAccent').addEventListener('input', e => { theme.accent  = e.target.value; applyTheme(); });
+  $('#cAccent2').addEventListener('input', e => { theme.accent2 = e.target.value; applyTheme(); });
+  $('#cBg').addEventListener('input', e => { theme.bg = e.target.value; applyTheme(); });
+
+  $('#resetTheme').addEventListener('click', () => {
+    theme = { ...DEFAULT_THEME };
+    applyTheme();
+    toast('已恢复默认主题');
+  });
+
+  /* ============================================================
+     3. 折叠面板
+  ============================================================ */
+  const COLLAPSE_KEY = 'gamepad-tester-collapsed-v1';
+  let collapsedSet = new Set();
+  try {
+    const arr = JSON.parse(localStorage.getItem(COLLAPSE_KEY) || '[]');
+    if (Array.isArray(arr)) collapsedSet = new Set(arr);
+  } catch (e) {}
+
+  const saveCollapsed = () => {
+    try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify([...collapsedSet])); } catch (e) {}
+  };
+
+  document.querySelectorAll('.card').forEach(card => {
+    const head = card.querySelector('.card-head');
+    const key  = card.dataset.card;
+
+    if (collapsedSet.has(key)) {
+      card.classList.add('collapsed');
+      head.setAttribute('aria-expanded', 'false');
+    }
+
+    const toggle = () => {
+      const nowCollapsed = card.classList.toggle('collapsed');
+      head.setAttribute('aria-expanded', String(!nowCollapsed));
+      if (nowCollapsed) collapsedSet.add(key); else collapsedSet.delete(key);
+      saveCollapsed();
+    };
+
+    head.addEventListener('click', toggle);
+    head.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+    });
+  });
+
+  /* ============================================================
+     4. 手柄核心逻辑
+  ============================================================ */
+  const STANDARD_BUTTON_LABELS = [
+    'A','B','X','Y','LB','RB','LT','RT',
+    'Back','Start','LS','RS','↑','↓','←','→','Home'
+  ];
+  const AXIS_LABELS = ['LX','LY','RX','RY'];
+
+  /* 按键位置描述（标准 Xbox 布局） */
+  const BUTTON_DESCRIPTIONS = [
+    'A 键（右下）',
+    'B 键（右右）',
+    'X 键（左左）',
+    'Y 键（上上）',
+    'LB（左上肩键）',
+    'RB（右上肩键）',
+    'LT（左扳机）',
+    'RT（右扳机）',
+    'Back（左中）',
+    'Start（右中）',
+    'LS（左摇杆按下）',
+    'RS（右摇杆按下）',
+    '十字键 ↑',
+    '十字键 ↓',
+    '十字键 ←',
+    '十字键 →',
+    'Home（中央）'
+  ];
+
+  const ui = {
+    status:       $('#status'),
+    padList:      $('#padList'),
+    info:         $('#info'),
+    buttons:      $('#buttons'),
+    axes:         $('#axes'),
+    stickL:       $('#stickL'),
+    stickR:       $('#stickR'),
+    stickLVal:    $('#stickLVal'),
+    stickRVal:    $('#stickRVal'),
+    rumbleWeak:   $('#rumbleWeak'),
+    rumbleStrong: $('#rumbleStrong')
+  };
+
+  const dotL = ui.stickL.querySelector('.stick-dot');
+  const dotR = ui.stickR.querySelector('.stick-dot');
+
+  let activeIndex = null;
+  let listSig     = '';
+  let builtSig    = '';
+  let btnEls      = [];
+  let axisEls     = [];
+  const infoRefs  = {};
+
+  function getPads() {
+    if (!navigator.getGamepads) return [];
+    return Array.from(navigator.getGamepads()).filter(Boolean);
+  }
+
+  function tick() {
+    const pads = getPads();
+    syncPadList(pads);
+
+    const gp = pads.find(p => p.index === activeIndex);
+    if (gp) {
+      render(gp);
+    } else if (pads.length === 0) {
+      clearPanels();
+    }
+    requestAnimationFrame(tick);
+  }
+
+  /* ---------- 列表 ---------- */
+  function shortName(id) {
+    return (id || 'Unknown Gamepad')
+      .replace(/\s*\([^)]*\)\s*/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim() || id;
+  }
+
+  function syncPadList(pads) {
+    const sig = pads.map(p => p.index + '|' + p.id).join('::');
+    if (sig === listSig) return;
+    listSig = sig;
+
+    if (pads.length === 0) {
+      activeIndex = null;
+      ui.status.textContent = '等待连接…';
+      ui.status.classList.remove('on');
+      ui.padList.innerHTML = '<p class="empty">暂无手柄<br><span>请连接手柄后按任意按键</span></p>';
+      clearPanels();
+      return;
+    }
+
+    if (activeIndex === null || !pads.some(p => p.index === activeIndex)) {
+      activeIndex = pads[0].index;
+    }
+
+    ui.status.textContent = `${pads.length} 个手柄已连接`;
+    ui.status.classList.add('on');
+
+    ui.padList.innerHTML = pads.map(p => `
+      <button class="pad-item ${p.index === activeIndex ? 'active' : ''}" data-index="${p.index}">
+        <span class="pad-icon">🎮</span>
+        <span class="pad-meta">
+          <b>#${p.index} ${escapeHtml(shortName(p.id))}</b>
+          <small>${p.mapping === 'standard' ? '标准映射' : '非标准映射'}</small>
+        </span>
+      </button>`).join('');
+
+    ui.padList.querySelectorAll('.pad-item').forEach(el => {
+      el.addEventListener('click', () => {
+        activeIndex = Number(el.dataset.index);
+        builtSig = '';
+        ui.padList.querySelectorAll('.pad-item').forEach(x =>
+          x.classList.toggle('active', Number(x.dataset.index) === activeIndex));
+      });
+    });
+  }
+
+  /* ---------- 渲染 ---------- */
+  function render(gp) {
+    const sig = [gp.buttons.length, gp.axes.length, gp.mapping, gp.id].join('|');
+    if (sig !== builtSig) {
+      builtSig = sig;
+      buildButtons(gp);
+      buildAxes(gp);
+      buildInfo();
+    }
+    updateInfo(gp);
+    updateButtons(gp);
+    updateAxes(gp);
+    updateSticks(gp);
+  }
+
+  /* ---------- 信息 ---------- */
+  function buildInfo() {
+    const rows = [
+      ['id', '名称'], ['index', '索引'], ['mapping', '映射'],
+      ['connected', '连接'], ['buttons', '按键数'], ['axes', '轴数'],
+      ['vibration', '震动'], ['timestamp', '时间戳']
+    ];
+    ui.info.innerHTML = rows.map(([k, label]) =>
+      `<div class="info-row"><dt>${label}</dt><dd data-k="${k}">—</dd></div>`).join('');
+    ui.info.querySelectorAll('dd').forEach(dd => { infoRefs[dd.dataset.k] = dd; });
+  }
+
+  function updateInfo(gp) {
+    if (!infoRefs.id) return;
+    infoRefs.id.textContent        = gp.id || '—';
+    infoRefs.index.textContent     = gp.index;
+    infoRefs.mapping.textContent   = gp.mapping || '—';
+    infoRefs.connected.textContent = gp.connected ? '已连接' : '未连接';
+    infoRefs.buttons.textContent   = gp.buttons.length;
+    infoRefs.axes.textContent      = gp.axes.length;
+
+    const va = gp.vibrationActuator;
+    if (!va) {
+      infoRefs.vibration.textContent = '不支持';
+    } else {
+      infoRefs.vibration.textContent =
+        (va.effects && va.effects.length) ? Array.from(va.effects).join(', ') : '支持';
+    }
+    infoRefs.timestamp.textContent = Number(gp.timestamp || 0).toFixed(2);
+  }
+
+  /* ---------- 按键 ---------- */
+  function buttonLabel(gp, i) {
+    return (gp.mapping === 'standard' && i < STANDARD_BUTTON_LABELS.length)
+      ? STANDARD_BUTTON_LABELS[i] : 'B' + i;
+  }
+
+  function buttonDesc(gp, i) {
+    if (gp.mapping === 'standard' && i < BUTTON_DESCRIPTIONS.length) {
+      return BUTTON_DESCRIPTIONS[i];
+    }
+    return `按键 #${i}（位置因手柄而异）`;
+  }
+
+  function buildButtons(gp) {
+    ui.buttons.innerHTML = '';
+    btnEls = [];
+
+    if (gp.buttons.length === 0) {
+      ui.buttons.innerHTML = '<p class="empty">此手柄没有上报按键数据</p>';
+      return;
+    }
+
+    for (let i = 0; i < gp.buttons.length; i++) {
+      const el = document.createElement('div');
+      el.className = 'btn';
+      const desc = buttonDesc(gp, i);
+      el.title = desc;
+      el.setAttribute('aria-label', desc);
+      el.innerHTML = `
+        <div class="btn-top">
+          <span class="btn-name">${escapeHtml(buttonLabel(gp, i))}</span>
+          <span class="btn-val">0.00</span>
+        </div>
+        <div class="btn-meter"><i></i></div>`;
+      el._meter = el.querySelector('.btn-meter i');
+      el._val   = el.querySelector('.btn-val');
+      ui.buttons.appendChild(el);
+      btnEls.push(el);
+    }
+  }
+
+  function updateButtons(gp) {
+    for (let i = 0; i < btnEls.length; i++) {
+      const b = gp.buttons[i], el = btnEls[i];
+      if (!b || !el) continue;
+      const v = clamp(typeof b.value === 'number' ? b.value : 0, 0, 1);
+      el.classList.toggle('pressed', b.pressed || v > 0.08);
+      el._meter.style.width = (v * 100).toFixed(1) + '%';
+      el._val.textContent = v.toFixed(2);
+    }
+  }
+
+  /* ---------- 轴 ---------- */
+  function axisLabel(gp, i) {
+    return (gp.mapping === 'standard' && i < AXIS_LABELS.length) ? AXIS_LABELS[i] : 'A' + i;
+  }
+
+  function buildAxes(gp) {
+    ui.axes.innerHTML = '';
+    axisEls = [];
+
+    if (gp.axes.length === 0) {
+      ui.axes.innerHTML = '<p class="empty">此手柄没有上报轴数据</p>';
+      return;
+    }
+
+    for (let i = 0; i < gp.axes.length; i++) {
+      const el = document.createElement('div');
+      el.className = 'axis-row';
+      el.innerHTML = `
+        <span class="axis-name">${escapeHtml(axisLabel(gp, i))}</span>
+        <div class="axis-track"><div class="axis-fill"></div></div>
+        <span class="axis-value">0.000</span>`;
+      el._fill = el.querySelector('.axis-fill');
+      el._val  = el.querySelector('.axis-value');
+      ui.axes.appendChild(el);
+      axisEls.push(el);
+    }
+  }
+
+  function updateAxes(gp) {
+    for (let i = 0; i < axisEls.length; i++) {
+      const v = clamp(gp.axes[i] ?? 0, -1, 1);
+      const el = axisEls[i];
+      const pct = Math.abs(v) * 50;
+      el._fill.style.width = pct.toFixed(2) + '%';
+      el._fill.style.left  = (v >= 0 ? 50 : 50 - pct).toFixed(2) + '%';
+      el._fill.classList.toggle('neg', v < 0);
+      el._val.textContent  = v.toFixed(3);
+    }
+  }
+
+  /* ---------- 摇杆 ---------- */
+  const DOT_RANGE = 62;
+  function setDot(dot, x, y) {
+    dot.style.transform =
+      `translate(${(clamp(x, -1, 1) * DOT_RANGE).toFixed(1)}px, ${(clamp(y, -1, 1) * DOT_RANGE).toFixed(1)}px)`;
+  }
+
+  function updateSticks(gp) {
+    const a = gp.axes;
+    const lx = clamp(a[0] ?? 0, -1, 1), ly = clamp(a[1] ?? 0, -1, 1);
+    const rx = clamp(a[2] ?? 0, -1, 1), ry = clamp(a[3] ?? 0, -1, 1);
+
+    setDot(dotL, lx, ly);
+    setDot(dotR, rx, ry);
+    ui.stickLVal.textContent = `${lx.toFixed(2)}, ${ly.toFixed(2)}`;
+    ui.stickRVal.textContent = `${rx.toFixed(2)}, ${ry.toFixed(2)}`;
+  }
+
+  /* ---------- 清空 ---------- */
+  function clearPanels() {
+    if (builtSig === '') return;
+    builtSig = '';
+    btnEls = [];
+    axisEls = [];
+    for (const k in infoRefs) delete infoRefs[k];
+
+    ui.info.innerHTML    = '<p class="empty">—</p>';
+    ui.buttons.innerHTML = '<p class="empty">连接手柄后显示</p>';
+    ui.axes.innerHTML    = '<p class="empty">连接手柄后显示</p>';
+
+    setDot(dotL, 0, 0);
+    setDot(dotR, 0, 0);
+    ui.stickLVal.textContent = '0.00, 0.00';
+    ui.stickRVal.textContent = '0.00, 0.00';
+  }
+
+  /* ---------- 震动 ---------- */
+  async function doRumble(strong, weak, duration) {
+    const gp = getPads().find(p => p.index === activeIndex);
+    if (!gp) return toast('没有连接的手柄');
+
+    const va = gp.vibrationActuator;
+    if (!va || typeof va.playEffect !== 'function') {
+      return toast('该手柄 / 浏览器不支持震动反馈');
+    }
+
+    try {
+      await va.playEffect('dual-rumble', {
+        startDelay: 0, duration, weakMagnitude: weak, strongMagnitude: strong
+      });
+      toast('已发送震动指令');
+    } catch (err) {
+      try {
+        await va.playEffect('trigger-rumble', {
+          startDelay: 0, duration, weakMagnitude: weak, strongMagnitude: strong
+        });
+        toast('已发送震动指令');
+      } catch (err2) {
+        toast('震动失败：' + (err2.message || '未知错误'));
+      }
+    }
+  }
+
+  ui.rumbleWeak.addEventListener('click',   () => doRumble(0.25, 0.45, 350));
+  ui.rumbleStrong.addEventListener('click', () => doRumble(1.0,  1.0,  650));
+
+  /* ============================================================
+     5. 启动动画 & 入场
+  ============================================================ */
+  const boot = document.getElementById('boot');
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  document.querySelectorAll('.card').forEach((card, i) => {
+    card.style.animationDelay = (1.75 + i * 0.07).toFixed(2) + 's';
+  });
+
+  if (reduceMotion) {
+    if (boot) boot.remove();
+  } else if (boot) {
+    let dismissed = false;
+    const dismiss = () => {
+      if (dismissed) return;
+      dismissed = true;
+      boot.classList.add('skip');
+      setTimeout(() => boot.remove(), 700);
+    };
+    setTimeout(dismiss, 1900);
+    boot.addEventListener('click', dismiss);
+  }
+
+  /* ============================================================
+     6. 启动主循环
+  ============================================================ */
+  if (!('getGamepads' in navigator)) {
+    ui.status.textContent = '浏览器不支持 Gamepad API';
+    toast('当前浏览器不支持 Gamepad API，请使用 Chrome / Edge / Firefox');
+    return;
+  }
+
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
